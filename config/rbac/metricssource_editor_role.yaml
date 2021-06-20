@@ -1,0 +1,24 @@
+# permissions for end users to edit metricssources.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metricssource-editor-role
+rules:
+- apiGroups:
+  - metricsrouter.io.metricsrouter.io
+  resources:
+  - metricssources
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metricsrouter.io.metricsrouter.io
+  resources:
+  - metricssources/status
+  verbs:
+  - get

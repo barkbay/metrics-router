@@ -1,0 +1,15 @@
+domain: metricsrouter.io
+layout:
+- go.kubebuilder.io/v3
+projectName: custom-metrics-router
+repo: github.com/barkbay/custom-metrics-router
+resources:
+- api:
+    crdVersion: v1
+  controller: true
+  domain: metricsrouter.io
+  group: metricsrouter.io
+  kind: MetricsSource
+  path: github.com/barkbay/custom-metrics-router/api/v1alpha1
+  version: v1alpha1
+version: "3"

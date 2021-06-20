@@ -1,0 +1,14 @@
+apiVersion: metricsrouter.io.metricsrouter.io/v1alpha1
+kind: MetricsSource
+metadata:
+  name: prometheus
+spec:
+  insecureSkipTLSVerify: true
+  priority: 100
+  metricTypes:
+    - CustomMetrics
+  service:
+    namespace: custom-metrics
+    name: prometheus-metrics-apiserver
+    port:
+      number: 443

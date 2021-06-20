@@ -1,0 +1,116 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
+  name: metricssources.metricsrouter.io.metricsrouter.io
+spec:
+  group: metricsrouter.io.metricsrouter.io
+  names:
+    kind: MetricsSource
+    listKind: MetricsSourceList
+    plural: metricssources
+    shortNames:
+    - ms
+    singular: metricssource
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.service
+      name: Service
+      type: string
+    - jsonPath: .status.port
+      name: Port
+      type: integer
+    - jsonPath: .status.synced
+      name: Synced
+      type: boolean
+    - jsonPath: .status.metricsCount
+      name: Metrics
+      type: integer
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: MetricsSource is the Schema for the metricssources API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: MetricsSourceSpec defines the desired state of MetricsSource
+            properties:
+              insecureSkipTLSVerify:
+                type: boolean
+              metricTypes:
+                items:
+                  enum:
+                  - CustomMetrics
+                  - ExternalMetrics
+                  type: string
+                type: array
+              priority:
+                type: integer
+              service:
+                description: Service is the K8S service to be called by the router.
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                  port:
+                    description: ServiceBackendPort represents an declarative configuration
+                      of the service backend to get the metrics from.
+                    properties:
+                      number:
+                        format: int32
+                        type: integer
+                    type: object
+                  scheme:
+                    description: URIScheme identifies the scheme used for connection
+                      to a host for Get actions
+                    type: string
+                type: object
+            required:
+            - metricTypes
+            - priority
+            type: object
+          status:
+            description: MetricsSourceStatus defines the observed state of MetricsSource
+            properties:
+              metricsCount:
+                type: integer
+              port:
+                type: integer
+              service:
+                type: string
+              synced:
+                type: boolean
+            required:
+            - metricsCount
+            - port
+            - service
+            - synced
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
