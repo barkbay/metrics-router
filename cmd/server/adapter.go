@@ -2,15 +2,13 @@ package server
 
 import (
 	"context"
-	"flag"
 	"os"
 	"os/user"
 	"path"
 
-	"github.com/barkbay/custom-metrics-router/pkg/controllers/metricsource"
 	"github.com/barkbay/custom-metrics-router/pkg/provider"
+	"github.com/barkbay/custom-metrics-router/pkg/registry"
 	basecmd "github.com/kubernetes-sigs/custom-metrics-apiserver/pkg/cmd"
-	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -19,22 +17,10 @@ import (
 
 type RoutedAdapter struct {
 	basecmd.AdapterBase
-	*metricsource.Registry
-}
-
-func NewRoutedAdapter(
-	registry *metricsource.Registry,
-	flags *pflag.FlagSet,
-) *RoutedAdapter {
-	router := &RoutedAdapter{
-		Registry: registry,
-	}
-	router.Flags().AddFlagSet(flags)
-	return router
+	*registry.Registry
 }
 
 func (r *RoutedAdapter) run(ctx context.Context) {
-	r.Flags().AddGoFlagSet(flag.CommandLine) // make sure you get the klog flags
 	err := r.Flags().Parse(os.Args)
 	if err != nil {
 		klog.Fatalf("failed to parse flags: %v", err)
@@ -44,7 +30,7 @@ func (r *RoutedAdapter) run(ctx context.Context) {
 	r.WithExternalMetrics(routedProvider)
 
 	// Attempt to load the config
-	if _, err := r.ClientConfig(); err != rest.ErrNotInCluster {
+	if _, err := r.ClientConfig(); err != nil && err != rest.ErrNotInCluster {
 		// Not in cluster, attempt to laad the config from a known place
 		kubeconfigPath := detectKubeconfigPath()
 		if kubeconfigPath == "" {

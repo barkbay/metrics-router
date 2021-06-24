@@ -20,7 +20,11 @@ testbin/*
 !vendor/**/zz_generated.*
 
 # editor and IDE paraphernalia
+*.iml
 .idea
 *.swp
 *.swo
 *~
+
+# tmp server configuration
+apiserver.local.config/

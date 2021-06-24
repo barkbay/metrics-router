@@ -1,0 +1,375 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: metrics-router
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: metricssources.metricsrouter.io.metricsrouter.io
+spec:
+  group: metricsrouter.io.metricsrouter.io
+  names:
+    kind: MetricsSource
+    listKind: MetricsSourceList
+    plural: metricssources
+    shortNames:
+    - ms
+    singular: metricssource
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.service
+      name: Service
+      type: string
+    - jsonPath: .status.port
+      name: Port
+      type: integer
+    - jsonPath: .status.synced
+      name: Synced
+      type: boolean
+    - jsonPath: .status.metricsCount
+      name: Metrics
+      type: integer
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: MetricsSource is the Schema for the metricssources API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: MetricsSourceSpec defines the desired state of MetricsSource
+            properties:
+              insecureSkipTLSVerify:
+                type: boolean
+              metricTypes:
+                items:
+                  enum:
+                  - CustomMetrics
+                  - ExternalMetrics
+                  type: string
+                type: array
+              priority:
+                type: integer
+              service:
+                description: Service is the K8S service to be called by the router.
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                  port:
+                    description: ServiceBackendPort represents an declarative configuration
+                      of the service backend to get the metrics from.
+                    properties:
+                      number:
+                        format: int32
+                        type: integer
+                    type: object
+                  scheme:
+                    description: URIScheme identifies the scheme used for connection
+                      to a host for Get actions
+                    type: string
+                type: object
+            required:
+            - metricTypes
+            - priority
+            type: object
+          status:
+            description: MetricsSourceStatus defines the observed state of MetricsSource
+            properties:
+              metricsCount:
+                type: integer
+              port:
+                type: integer
+              service:
+                type: string
+              synced:
+                type: boolean
+            required:
+            - metricsCount
+            - port
+            - service
+            - synced
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: metrics-router-controller-manager
+  namespace: metrics-router
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metrics-router-server-resources
+rules:
+  - apiGroups:
+      - custom.metrics.k8s.io
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metrics-router-resource-reader
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+      - pods
+      - services
+    verbs:
+      - get
+      - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metrics-router-manager-role
+rules:
+- apiGroups:
+  - metricsrouter.io.metricsrouter.io
+  resources:
+  - metricssources
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metricsrouter.io.metricsrouter.io
+  resources:
+  - metricssources/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - metricsrouter.io.metricsrouter.io
+  resources:
+  - metricssources/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metrics-router-metrics-reader
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metrics-router-proxy-role
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+# Role bindings
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metrics-router-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metrics-router-manager-role
+subjects:
+  - kind: ServiceAccount
+    name: metrics-router-controller-manager
+    namespace: metrics-router
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metrics-router-server-resources
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: custom-metrics-server-resources
+subjects:
+  - kind: ServiceAccount
+    name: metrics-router-controller-manager
+    namespace: metrics-router
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metrics-router-proxy-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metrics-router-proxy-role
+subjects:
+- kind: ServiceAccount
+  name: metrics-router-controller-manager
+  namespace: metrics-router
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: metrics-router-auth-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+  - kind: ServiceAccount
+    name: metrics-router-controller-manager
+    namespace: metrics-router
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metrics-router-resource-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metrics-router-resource-reader
+subjects:
+  - kind: ServiceAccount
+    name: metrics-router-controller-manager
+    namespace: metrics-router
+---
+# Network services
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: metrics-router-controller-manager-metrics-service
+  namespace: metrics-router
+spec:
+  ports:
+  - name: https
+    port: 8443
+    targetPort: https
+  selector:
+    control-plane: controller-manager
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: metrics-apiserver
+  namespace: metrics-router
+spec:
+  ports:
+    - name: https
+      port: 443
+      targetPort: 6443
+  selector:
+    control-plane: controller-manager
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: metrics-router-controller-manager
+  namespace: metrics-router
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  template:
+    metadata:
+      labels:
+        control-plane: controller-manager
+    spec:
+      volumes:
+        - name: apiserver-config
+          emptyDir: {}
+      containers:
+      - args:
+        - --secure-listen-address=0.0.0.0:8443
+        - --upstream=http://127.0.0.1:8080/
+        - --logtostderr=true
+        - --v=10
+        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0
+        name: kube-rbac-proxy
+        ports:
+        - containerPort: 8443
+          name: https
+      - args:
+        - server
+        - --health-probe-bind-address=:8081
+        - --metrics-bind-address=127.0.0.1:8080
+        - --secure-port=6443
+        command:
+        - /metrics-router
+        image: docker.io/barkbay/metrics-router:latest
+        ports:
+          - containerPort: 6443
+            name: metrics-server
+        volumeMounts:
+          - mountPath: /apiserver.local.config
+            name: apiserver-config
+        name: server
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+      securityContext:
+        runAsNonRoot: true
+      serviceAccountName: metrics-router-controller-manager
+      terminationGracePeriodSeconds: 10

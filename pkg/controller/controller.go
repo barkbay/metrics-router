@@ -14,36 +14,29 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package metricsource
+package controller
 
 import (
 	"context"
 	"reflect"
 	"time"
 
+	"github.com/barkbay/custom-metrics-router/pkg/registry"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	mrv1alpha1 "github.com/barkbay/custom-metrics-router/pkg/api/v1alpha1"
-	"github.com/kubernetes-sigs/custom-metrics-apiserver/pkg/provider"
 )
 
-func SetupMetricsSourceController(mgr ctrl.Manager) (*Registry, error) {
+func SetupMetricsSourceController(mgr ctrl.Manager) (*registry.Registry, error) {
 	k8sClient := mgr.GetClient()
 
 	// Create a new routes registry
-	registry := &Registry{
-		metricsServiceBackendState: make(map[types.NamespacedName]MetricsServiceBackendState),
-		customMetrics:              make(map[provider.CustomMetricInfo]*MetricsServices),
-		externalMetrics:            make(map[provider.ExternalMetricInfo]*MetricsServices),
-		baseConfig:                 mgr.GetConfig(),
-		mapper:                     k8sClient.RESTMapper(),
-	}
+	registry := registry.NewRegistry(mgr.GetConfig(), k8sClient.RESTMapper())
 
 	// Create the reconciler
 	reconciler := &MetricsSourceReconciler{
@@ -59,7 +52,7 @@ func SetupMetricsSourceController(mgr ctrl.Manager) (*Registry, error) {
 // MetricsSourceReconciler reconciles a MetricsSource object
 type MetricsSourceReconciler struct {
 	client.Client
-	registry *Registry
+	registry *registry.Registry
 	Scheme   *runtime.Scheme
 }
 
@@ -79,14 +72,14 @@ func (r *MetricsSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	metricsSource := &mrv1alpha1.MetricsSource{}
 	err := r.Client.Get(context.Background(), req.NamespacedName, metricsSource)
 	if errors.IsNotFound(err) || metricsSource.IsMarkedForDeletion() {
-		r.registry.DeleteService(req.NamespacedName)
+		r.registry.DeleteSource(req.Name)
 		return ctrl.Result{}, nil
 	}
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	metricCount, err := r.registry.AddOrUpdateService(*metricsSource)
+	metricCount, err := r.registry.AddOrUpdateSource(*metricsSource)
 	newStatus := mrv1alpha1.MetricsSourceStatus{
 		Synced:       err == nil,
 		MetricsCount: metricCount,

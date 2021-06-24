@@ -30,6 +30,11 @@ import (
 
 type MetricType string
 
+const (
+	CustomMetrics   = MetricType("CustomMetrics")
+	ExternalMetrics = MetricType("ExternalMetrics")
+)
+
 var defaultBackendPort int32 = 443
 
 // ServiceBackendPort represents an declarative configuration of the service backend to get the metrics from.
@@ -88,11 +93,11 @@ func (m MetricTypes) contains(metric MetricType) bool {
 }
 
 func (m MetricTypes) HasCustomMetrics() bool {
-	return m.contains("CustomMetrics")
+	return m.contains(CustomMetrics)
 }
 
 func (m MetricTypes) HasExternalMetrics() bool {
-	return m.contains("ExternalMetrics")
+	return m.contains(ExternalMetrics)
 }
 
 // MetricsSourceSpec defines the desired state of MetricsSource
@@ -135,13 +140,6 @@ func (m *MetricsSource) IsMarkedForDeletion() bool {
 		return false
 	}
 	return !m.DeletionTimestamp.IsZero()
-}
-
-func (m MetricsSource) NamespacedNamed() types.NamespacedName {
-	return types.NamespacedName{
-		Namespace: m.Namespace,
-		Name:      m.Name,
-	}
 }
 
 //+kubebuilder:object:root=true

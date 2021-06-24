@@ -19,7 +19,7 @@ package provider
 import (
 	"fmt"
 
-	"github.com/barkbay/custom-metrics-router/pkg/controllers/metricsource"
+	"github.com/barkbay/custom-metrics-router/pkg/registry"
 	"github.com/kubernetes-sigs/custom-metrics-apiserver/pkg/provider"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -33,10 +33,10 @@ type FullMetricsProvider interface {
 }
 
 type routedMetricsProvider struct {
-	registry *metricsource.Registry
+	registry *registry.Registry
 }
 
-func NewRoutedProvider(customMetricRoutes *metricsource.Registry) FullMetricsProvider {
+func NewRoutedProvider(customMetricRoutes *registry.Registry) FullMetricsProvider {
 	return &routedMetricsProvider{
 		registry: customMetricRoutes,
 	}

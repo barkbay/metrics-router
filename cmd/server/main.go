@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	mrv1alpha1 "github.com/barkbay/custom-metrics-router/pkg/api/v1alpha1"
-	"github.com/barkbay/custom-metrics-router/pkg/controllers/metricsource"
+	"github.com/barkbay/custom-metrics-router/pkg/controller"
 
 	_ "gopkg.in/yaml.v2"
 	//+kubebuilder:scaffold:imports
@@ -51,6 +51,8 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 }
 
+var adapter = &RoutedAdapter{}
+
 func Command() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "server",
@@ -60,41 +62,40 @@ func Command() *cobra.Command {
 	cmd.Flags().Bool("anonymous-auth", false, "if true, metrics server authentication and authorization are disabled, only to be used in dev mode")
 	cmd.Flags().String("metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	cmd.Flags().String("health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	// Register adapter flags
+	cmd.Flags().AddFlagSet(adapter.Flags())
+	adapter.FlagSet.AddGoFlagSet(flag.CommandLine) // make sure you get the klog flags
+	adapter.FlagSet.AddFlagSet(cmd.Flags())
 	return cmd
 }
 
 func doRun(cmd *cobra.Command, _ []string) {
-	/*devMode := viper.GetBool("development")
-	opts := zap.Options{
-		Development: devMode,
-	}
-	opts.BindFlags(flag.CommandLine)*/
 	flag.Parse()
 	if err := viper.BindPFlags(cmd.Flags()); err != nil {
 		setupLog.Error(err, "failed to bind flags")
 		os.Exit(1)
 	}
 
-	//ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
-
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	ctrlOpts := ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     viper.GetString("metrics-bind-address"),
 		Port:                   9443,
 		HealthProbeBindAddress: viper.GetString("health-probe-bind-address"),
-	})
+	}
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrlOpts)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
 	// Create a new routes registry
-	registry, err := metricsource.SetupMetricsSourceController(mgr)
+	registry, err := controller.SetupMetricsSourceController(mgr)
 	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MetricsSource")
 		os.Exit(1)
 	}
-
+	// Set adapter registry
+	adapter.Registry = registry
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
 		os.Exit(1)
@@ -105,7 +106,7 @@ func doRun(cmd *cobra.Command, _ []string) {
 	}
 
 	signalHandler := ctrl.SetupSignalHandler()
-	go NewRoutedAdapter(registry, cmd.Flags()).run(signalHandler)
+	go adapter.run(signalHandler)
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(signalHandler); err != nil {

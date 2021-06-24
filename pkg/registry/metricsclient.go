@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package metricsclient
+package registry
 
 import (
 	"fmt"
@@ -40,13 +40,37 @@ import (
 	emClient "k8s.io/metrics/pkg/client/external_metrics"
 )
 
-type Client struct {
-	customMetricsClient   cmClient.CustomMetricsClient
+type MetricsClient interface {
+	GetBackend() v1alpha1.MetricsServiceBackend
+
+	ListCustomMetricInfos() (map[provider.CustomMetricInfo]struct{}, error)
+	GetMetricByName(name types.NamespacedName, info provider.CustomMetricInfo, selector labels.Selector) (*custom_metrics.MetricValue, error)
+	GetMetricBySelector(namespace string, selector labels.Selector, info provider.CustomMetricInfo, metricSelector labels.Selector) (*custom_metrics.MetricValueList, error)
+
+	ListExternalMetrics() (map[provider.ExternalMetricInfo]struct{}, error)
+	GetExternalMetric(name, namespace string, selector labels.Selector) (*external_metrics.ExternalMetricValueList, error)
+}
+
+type MetricsClientProvider interface {
+	NewClient(insecureTLSSkipVerify bool, backend v1alpha1.MetricsServiceBackend) (MetricsClient, error)
+}
+
+type metricsClientProvider struct {
+	baseConfig *rest.Config
+	mapper     meta.RESTMapper
+}
+
+type metricsClient struct {
+	customMetricsAvailableAPIsGetter cmClient.AvailableAPIsGetter
+	customMetricsClient              cmClient.CustomMetricsClient
+
 	externalMetricsClient emClient.ExternalMetricsClient
 	discoveryClient       discovery.CachedDiscoveryInterface
 	mapper                meta.RESTMapper
 	backend               v1alpha1.MetricsServiceBackend
 }
+
+var _ MetricsClient = &metricsClient{}
 
 // adaptConfig update the original K8S client configuration so it can be used to connect to the
 // metric service.
@@ -62,8 +86,8 @@ func adaptConfig(baseConfig *rest.Config, backend v1alpha1.MetricsServiceBackend
 	return clientConfig, nil
 }
 
-func NewClient(insecureTLSSkipVerify bool, backend v1alpha1.MetricsServiceBackend, baseConfig *rest.Config, mapper meta.RESTMapper) (*Client, error) {
-	config, err := adaptConfig(baseConfig, backend, insecureTLSSkipVerify)
+func (mcp metricsClientProvider) NewClient(insecureTLSSkipVerify bool, backend v1alpha1.MetricsServiceBackend) (MetricsClient, error) {
+	config, err := adaptConfig(mcp.baseConfig, backend, insecureTLSSkipVerify)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate rest config for %s: %s", backend.URL(), err)
 	}
@@ -72,26 +96,37 @@ func NewClient(insecureTLSSkipVerify bool, backend v1alpha1.MetricsServiceBacken
 		return nil, fmt.Errorf("failed to create discovery client: %v", err)
 	}
 	cachedClient := cachedDiscovery.NewMemCacheClient(discoveryClient)
-	customMetricsClient := cmClient.NewForConfig(config, mapper, cmClient.NewAvailableAPIsGetter(discoveryClient))
+	customMetricsAvailableAPIsGetter := cmClient.NewAvailableAPIsGetter(discoveryClient)
+	customMetricsClient := cmClient.NewForConfig(config, mcp.mapper, customMetricsAvailableAPIsGetter)
 	externalMetricsClient, err := emClient.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create external metrics client: %v", err)
 	}
 
-	return &Client{
-		backend:               backend,
-		customMetricsClient:   customMetricsClient,
+	return &metricsClient{
+		backend: backend,
+
+		customMetricsAvailableAPIsGetter: customMetricsAvailableAPIsGetter,
+		customMetricsClient:              customMetricsClient,
+
 		externalMetricsClient: externalMetricsClient,
 		discoveryClient:       cachedClient,
-		mapper:                mapper,
+		mapper:                mcp.mapper,
 	}, err
 }
 
-func (c *Client) ListCustomMetricInfos() (map[provider.CustomMetricInfo]struct{}, error) {
-	resources, err := c.discoveryClient.ServerResourcesForGroupVersion(customMetricsAPI.SchemeGroupVersion.String())
+func (c *metricsClient) GetBackend() v1alpha1.MetricsServiceBackend {
+	return c.backend
+}
+
+func (c *metricsClient) ListCustomMetricInfos() (map[provider.CustomMetricInfo]struct{}, error) {
+	version, err := c.customMetricsAvailableAPIsGetter.PreferredVersion()
+	if err != nil {
+		return nil, err
+	}
+	resources, err := c.discoveryClient.ServerResourcesForGroupVersion(version.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resource for %s: %v", customMetricsAPI.SchemeGroupVersion, err)
-
 	}
 	metricInfos := make(map[provider.CustomMetricInfo]struct{})
 	for _, r := range resources.APIResources {
@@ -109,7 +144,7 @@ func (c *Client) ListCustomMetricInfos() (map[provider.CustomMetricInfo]struct{}
 	return metricInfos, nil
 }
 
-func (c *Client) GetMetricByName(name types.NamespacedName, info provider.CustomMetricInfo, selector labels.Selector) (*custom_metrics.MetricValue, error) {
+func (c *metricsClient) GetMetricByName(name types.NamespacedName, info provider.CustomMetricInfo, selector labels.Selector) (*custom_metrics.MetricValue, error) {
 	var object *v1beta2.MetricValue
 
 	var err error
@@ -145,7 +180,7 @@ func (c *Client) GetMetricByName(name types.NamespacedName, info provider.Custom
 	}, nil
 }
 
-func (c *Client) GetMetricBySelector(namespace string, selector labels.Selector, info provider.CustomMetricInfo, metricSelector labels.Selector) (*custom_metrics.MetricValueList, error) {
+func (c *metricsClient) GetMetricBySelector(namespace string, selector labels.Selector, info provider.CustomMetricInfo, metricSelector labels.Selector) (*custom_metrics.MetricValueList, error) {
 	var objects *v1beta2.MetricValueList
 	var err error
 	kind, err := c.mapper.ResourceSingularizer(info.GroupResource.Resource)
@@ -197,7 +232,7 @@ func (c *Client) GetMetricBySelector(namespace string, selector labels.Selector,
 	}, nil
 }
 
-func (c *Client) ListExternalMetrics() (map[provider.ExternalMetricInfo]struct{}, error) {
+func (c *metricsClient) ListExternalMetrics() (map[provider.ExternalMetricInfo]struct{}, error) {
 	infos := make(map[provider.ExternalMetricInfo]struct{})
 	resources, err := c.discoveryClient.ServerResourcesForGroupVersion(externalMetricsAPI.SchemeGroupVersion.String())
 	if err != nil {
@@ -212,7 +247,7 @@ func (c *Client) ListExternalMetrics() (map[provider.ExternalMetricInfo]struct{}
 	return infos, nil
 }
 
-func (c *Client) GetExternalMetric(name, namespace string, selector labels.Selector) (*external_metrics.ExternalMetricValueList, error) {
+func (c *metricsClient) GetExternalMetric(name, namespace string, selector labels.Selector) (*external_metrics.ExternalMetricValueList, error) {
 	result, err := c.externalMetricsClient.NamespacedMetrics(namespace).List(name, selector)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metrics for external metric %s/%s: %v", namespace, name, err)
