@@ -5,7 +5,7 @@ metadata:
   name: metricssource-editor-role
 rules:
 - apiGroups:
-  - metricsrouter.io.metricsrouter.io
+  - metricsrouter.io
   resources:
   - metricssources
   verbs:
@@ -17,7 +17,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - metricsrouter.io.metricsrouter.io
+  - metricsrouter.io
   resources:
   - metricssources/status
   verbs:

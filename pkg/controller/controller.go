@@ -56,9 +56,9 @@ type MetricsSourceReconciler struct {
 	Scheme   *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=metricsrouter.io.metricsrouter.io,resources=metricssources,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=metricsrouter.io.metricsrouter.io,resources=metricssources/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=metricsrouter.io.metricsrouter.io,resources=metricssources/finalizers,verbs=update
+//+kubebuilder:rbac:groups=metricsrouter.io,resources=metricssources,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=metricsrouter.io,resources=metricssources/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=metricsrouter.io,resources=metricssources/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

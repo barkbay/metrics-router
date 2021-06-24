@@ -6,9 +6,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
-  name: metricssources.metricsrouter.io.metricsrouter.io
+  name: metricssources.metricsrouter.io
 spec:
-  group: metricsrouter.io.metricsrouter.io
+  group: metricsrouter.io
   names:
     kind: MetricsSource
     listKind: MetricsSourceList

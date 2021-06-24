@@ -30,7 +30,7 @@ metrics-router-controller-manager-5474f885c5-jtwmw   2/2     Running   0        
 
 ```
 cat <<EOF | kubectl apply -f -
-apiVersion: metricsrouter.io.metricsrouter.io/v1alpha1
+apiVersion: metricsrouter.io/v1alpha1
 kind: MetricsSource
 metadata:
   name: prometheus

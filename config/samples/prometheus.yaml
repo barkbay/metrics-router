@@ -1,4 +1,4 @@
-apiVersion: metricsrouter.io.metricsrouter.io/v1alpha1
+apiVersion: metricsrouter.io/v1alpha1
 kind: MetricsSource
 metadata:
   name: prometheus
